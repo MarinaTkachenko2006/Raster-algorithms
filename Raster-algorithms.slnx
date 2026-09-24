@@ -1,0 +1,7 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="Raster-algorithms/Raster-algorithms.vcxproj" Id="19cac4b9-bad6-4c35-8f90-70f1c278f26a" />
+</Solution>
