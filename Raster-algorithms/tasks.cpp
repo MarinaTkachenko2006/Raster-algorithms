@@ -201,6 +201,47 @@ void Task1::draw(const AppContext& ctx){
             }
         }
     }
+    else if (canvasMode == CanvasMode::TraceBoundary) {
+        wasDrawing = false;
+
+        if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
+            ImVec2 m = ImGui::GetIO().MousePos;
+            ImVec2 c = toCanvasCoords(m);
+
+            // 1. Находим первую граничную точку и её цвет
+            int sx, sy;
+            uint8_t bR, bG, bB;
+            if (findBoundaryStart(canvasPixels, CANVAS_W, CANVAS_H,
+                (int)c.x, (int)c.y,
+                sx, sy,
+                bR, bG, bB))
+            {
+                // 2. Обходим границу, ища пиксели цвета (bR, bG, bB)
+                std::vector<std::pair<int, int>> boundary;
+                if (traceBoundary(canvasPixels, CANVAS_W, CANVAS_H,
+                    sx, sy,
+                    bR, bG, bB,
+                    boundary))
+                {
+                    // 3. Выделяем найденные пиксели цветом кисти
+                    uint8_t hr = (uint8_t)std::clamp(brushR, 0, 255);
+                    uint8_t hg = (uint8_t)std::clamp(brushG, 0, 255);
+                    uint8_t hb = (uint8_t)std::clamp(brushB, 0, 255);
+
+                    for (auto& [px, py] : boundary) {
+                        if (px < 0 || px >= CANVAS_W || py < 0 || py >= CANVAS_H)
+                            continue;
+                        size_t di = (static_cast<size_t>(py) * CANVAS_W + px) * 4;
+                        canvasPixels[di + 0] = hr;
+                        canvasPixels[di + 1] = hg;
+                        canvasPixels[di + 2] = hb;
+                        canvasPixels[di + 3] = 255;
+                    }
+                    canvasDirty = true;
+                }
+            }
+        }
+    }
     else { // CanvasMode::Fill
         // --- Режим заливки: реагируем на одиночный клик ---
         wasDrawing = false; // сбрасываем, чтобы при переключении режима не было «хвоста» штриха
@@ -257,7 +298,7 @@ void Task1::draw(const AppContext& ctx){
     ImGui::Text("Canvas mode");
 
     ImGui::SetNextItemWidth(-FLT_MIN);
-    const char* modeNames[] = { "Draw line", "Fill", "Fill with texture" };
+    const char* modeNames[] = { "Draw line", "Fill", "Fill with texture", "Trace boundary" };
     int modeIndex = static_cast<int>(canvasMode);
     if (ImGui::Combo("##mode", &modeIndex, modeNames, IM_ARRAYSIZE(modeNames))) {
         canvasMode = static_cast<CanvasMode>(modeIndex);

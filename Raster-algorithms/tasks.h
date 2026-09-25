@@ -37,7 +37,7 @@ private:
     ImageRGB image; // Изображение, загруженное в RAM
     SDL_Texture* texImage = nullptr; // Текстура загруженного изображения
 
-    // --- Холст ---
+    // Холст 
     static constexpr int CANVAS_W = 800;
     static constexpr int CANVAS_H = 600;
 
@@ -45,18 +45,18 @@ private:
     SDL_Texture* canvasTex = nullptr;    // текстура холста
     bool canvasDirty = true;             // нужно ли обновлять текстуру из буфера
 
-    // --- Текущий цвет кисти ---
+    // Текущий цвет кисти 
     int brushR = 0, brushG = 0, brushB = 0;
 
     // толщина кисти
     int brushThickness = 1;
 
-    // --- Состояние рисования между кадрами ---
+    // Состояние рисования между кадрами
     bool wasDrawing = false;
-    ImVec2 lastDrawPos;                  // предыдущая точка в координатах холста
+    ImVec2 lastDrawPos;  // предыдущая точка в координатах холста
 
     // варианты взаимодействия с холстом: рисовать линии, залить область цветом
-    enum class CanvasMode { DrawLine, Fill, FillTexture };
+    enum class CanvasMode { DrawLine, Fill, FillTexture, TraceBoundary };
     CanvasMode canvasMode = CanvasMode::DrawLine;
 
     // рисование толстой линии
@@ -66,11 +66,13 @@ private:
         int thickness,
         uint8_t r, uint8_t g, uint8_t b);
 
+    // заполнение цветом
     void fillWithColor(std::vector<uint8_t>& pixels,
         int width, int height,
         int x, int y,
         uint8_t fillR, uint8_t fillG, uint8_t fillB);
 
+    // заполнение текстурой
     void fillWithTexture(std::vector<uint8_t>& pixels,
         int width, int height,
         int x, int y,

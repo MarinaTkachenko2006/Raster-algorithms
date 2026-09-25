@@ -237,3 +237,128 @@ void floodFillTextureSeries(std::vector<uint8_t>& pixels, int width, int height,
         }
     }
 }
+
+// Смещения по 8 направлениям для алгоритма выделения границы, dir 0 = вправо, далее по часовой стрелке
+// в экранных координатах (Y растёт вниз)
+static const int DX[8] = { +1, +1,  0, -1, -1, -1,  0, +1 };
+static const int DY[8] = { 0, +1, +1, +1,  0, -1, -1, -1 };
+
+//  Поиск первой граничной точки: идём влево от клика, пока не встретим пиксель цвета границы. Если дошли до края холста — идём вправо.
+bool findBoundaryStart(const std::vector<uint8_t>& pixels,
+    int width, int height,
+    int clickX, int clickY,
+    int& outX, int& outY,
+    uint8_t& borderR, uint8_t& borderG, uint8_t& borderB)
+{
+    if (clickX < 0 || clickX >= width || clickY < 0 || clickY >= height)
+        return false;
+
+    // Цвет области — цвет пикселя под кликом
+    size_t iClick = (static_cast<size_t>(clickY) * width + clickX) * 4;
+    uint8_t ar = pixels[iClick + 0];
+    uint8_t ag = pixels[iClick + 1];
+    uint8_t ab = pixels[iClick + 2];
+
+    // Идём влево, пока цвет совпадает с цветом области.
+    // Первый пиксель с другим цветом — граница; запоминаем её цвет.
+    for (int x = clickX - 1; x >= 0; --x) {
+        size_t i = (static_cast<size_t>(clickY) * width + x) * 4;
+        bool sameAsArea = (pixels[i + 0] == ar &&
+            pixels[i + 1] == ag &&
+            pixels[i + 2] == ab);
+        if (!sameAsArea) {
+            outX = x;
+            outY = clickY;
+            borderR = pixels[i + 0];
+            borderG = pixels[i + 1];
+            borderB = pixels[i + 2];
+            return true;
+        }
+    }
+
+    // Слева не нашли — идём вправо
+    for (int x = clickX + 1; x < width; ++x) {
+        size_t i = (static_cast<size_t>(clickY) * width + x) * 4;
+        bool sameAsArea = (pixels[i + 0] == ar &&
+            pixels[i + 1] == ag &&
+            pixels[i + 2] == ab);
+        if (!sameAsArea) {
+            outX = x;
+            outY = clickY;
+            borderR = pixels[i + 0];
+            borderG = pixels[i + 1];
+            borderB = pixels[i + 2];
+            return true;
+        }
+    }
+
+    return false;
+}
+
+//  Обход границы
+//  Все граничные пиксели одного цвета (br,bg,bb).
+//  Порядок обхода — по часовой стрелке.
+bool traceBoundary(const std::vector<uint8_t>& pixels,
+    int width, int height,
+    int startX, int startY,
+    uint8_t borderR, uint8_t borderG, uint8_t borderB,
+    std::vector<std::pair<int, int>>& outBoundary)
+{
+    outBoundary.clear();
+
+    if (startX < 0 || startX >= width || startY < 0 || startY >= height)
+        return false;
+
+    // Стартовая точка должна быть цвета границы
+    size_t startIdx = (static_cast<size_t>(startY) * width + startX) * 4;
+    if (!sameColor(pixels, startIdx, borderR, borderG, borderB))
+        return false;
+
+    int cx = startX;
+    int cy = startY;
+
+    // Первый раз — начинаем смотреть вниз (dir = 2)
+    int scanStart = 2;
+
+    bool firstStep = true;
+    const int maxIter = width * height * 8;
+    int iter = 0;
+
+    while (true) {
+        if (++iter > maxIter) break;
+
+        outBoundary.emplace_back(cx, cy);
+
+        // Ищем следующую точку по часовой стрелке от scanStart
+        int foundDir = -1;
+        int nx = cx, ny = cy;
+        for (int k = 0; k < 8; ++k) {
+            int dir = (scanStart + k) % 8;
+            int px = cx + DX[dir];
+            int py = cy + DY[dir];
+            if (px < 0 || px >= width || py < 0 || py >= height) continue;
+
+            size_t i = (static_cast<size_t>(py) * width + px) * 4;
+            if (sameColor(pixels, i, borderR, borderG, borderB)) {
+                foundDir = dir;
+                nx = px;
+                ny = py;
+                break;
+            }
+        }
+
+        if (foundDir < 0) break;
+
+        // Поворот на 90 градусов по часовой стрелке от направления прихода
+        scanStart = (foundDir - 2 + 8) % 8;
+
+        cx = nx;
+        cy = ny;
+
+        if (!firstStep && cx == startX && cy == startY)
+            break;
+        firstStep = false;
+    }
+
+    return !outBoundary.empty();
+}
