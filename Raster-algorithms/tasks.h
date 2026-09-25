@@ -56,7 +56,7 @@ private:
     ImVec2 lastDrawPos;                  // предыдущая точка в координатах холста
 
     // варианты взаимодействия с холстом: рисовать линии, залить область цветом
-    enum class CanvasMode { DrawLine, Fill };
+    enum class CanvasMode { DrawLine, Fill, FillTexture };
     CanvasMode canvasMode = CanvasMode::DrawLine;
 
     // рисование толстой линии
@@ -71,6 +71,11 @@ private:
         int x, int y,
         uint8_t fillR, uint8_t fillG, uint8_t fillB);
 
+    void fillWithTexture(std::vector<uint8_t>& pixels,
+        int width, int height,
+        int x, int y,
+        const uint8_t* texData,
+        int texWidth, int texHeight);
 
 public:
 

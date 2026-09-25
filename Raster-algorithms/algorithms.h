@@ -2,6 +2,7 @@
 #define __ALGORITHMS_IMD_MAR_VIK__
 
 #include <vector>
+#include "images.h"
 
 static inline bool sameColor(const std::vector<uint8_t>& p, size_t i,
     uint8_t r, uint8_t g, uint8_t b);
@@ -25,5 +26,15 @@ void floodFillSeries(std::vector<uint8_t>& pixels,
     int x, int y,
     uint8_t tr, uint8_t tg, uint8_t tb,  // целевой цвет (то, что закрашиваем)
     uint8_t fr, uint8_t fg, uint8_t fb);  // цвет заливки
+
+
+void floodFillTextureSeries(std::vector<uint8_t>& pixels,
+    int width, int height,
+    int x, int y,
+    uint8_t tr, uint8_t tg, uint8_t tb,   // целевой цвет холста
+    int anchorX, int anchorY,             // точка клика
+    const uint8_t* texData,
+    int texWidth, int texHeight,
+    std::vector<uint8_t>& visited);       // уже посещенные пиксели, так как текстура может содержать разные цвета и проверка на цвет здесь не работает
 
 #endif // !__ALGORITHMS_IMD_MAR_VIK__

@@ -5,6 +5,13 @@ inline bool sameColor(const std::vector<uint8_t>& p, size_t i, uint8_t r, uint8_
     return p[i + 0] == r && p[i + 1] == g && p[i + 2] == b;
 }
 
+// циклический индекс(a mod n)
+inline int cyclic_index(int a, int n)
+{
+    int m = a % n;
+    return (m < 0) ? m + n : m;
+}
+
 inline void setPixel(std::vector<uint8_t>& p, size_t i, uint8_t r, uint8_t g, uint8_t b)
 {
     p[i + 0] = r;
@@ -36,7 +43,7 @@ void bresenhamLine(std::vector<uint8_t>& pixels,
         };
 
     if (dy <= dx) {
-        // ---------- gradient <= 1 ----------
+        // gradient <= 1 
         int d = 2 * dy - dx;
         int y = y0;
 
@@ -55,7 +62,7 @@ void bresenhamLine(std::vector<uint8_t>& pixels,
         }
     }
     else {
-        // ---------- gradient > 1 ----------
+        // gradient > 1
         int d = 2 * dx - dy;
         int x = x0;
 
@@ -132,6 +139,100 @@ void floodFillSeries(std::vector<uint8_t>& pixels, int width, int height, int x,
                 floodFillSeries(pixels, width, height,
                     xi, y + 1,
                     tr, tg, tb, fr, fg, fb);
+            }
+        }
+    }
+}
+
+void floodFillTextureSeries(std::vector<uint8_t>& pixels, int width, int height, int x, int y, 
+    uint8_t tr, uint8_t tg, uint8_t tb, 
+    int anchorX, int anchorY, const uint8_t* texData, int texWidth, int texHeight,
+    std::vector<uint8_t>& visited)
+{
+    // Левая граница серии (с учётом visited и целевого цвета)
+    int left = x;
+    while (left - 1 >= 0) {
+        size_t idx = static_cast<size_t>(y) * width + (left - 1);
+        if (visited[idx]) break;
+        size_t i = idx * 4;
+        if (!sameColor(pixels, i, tr, tg, tb)) break;
+        --left;
+    }
+
+    // Правая граница серии
+    int right = x;
+    while (right + 1 < width) {
+        size_t idx = static_cast<size_t>(y) * width + (right + 1);
+        if (visited[idx]) break;
+        size_t i = idx * 4;
+        if (!sameColor(pixels, i, tr, tg, tb)) break;
+        ++right;
+    }
+
+    // Помечаем всю серию как посещённую и закрашиваем её 
+    const int anchorTexX = texWidth / 2;
+    const int anchorTexY = texHeight / 2;
+
+    for (int xi = left; xi <= right; ++xi) {
+        size_t idx = static_cast<size_t>(y) * width + xi;
+        visited[idx] = 1;
+
+        int tx = cyclic_index(anchorTexX + (xi - anchorX), texWidth);
+        int ty = cyclic_index(anchorTexY + (y - anchorY), texHeight);
+
+        size_t si = (static_cast<size_t>(ty) * texWidth + tx) * 3;
+        size_t di = idx * 4;
+
+        pixels[di + 0] = texData[si + 0];
+        pixels[di + 1] = texData[si + 1];
+        pixels[di + 2] = texData[si + 2];
+        pixels[di + 3] = 255;
+    }
+
+    // Идём по серии и отслеживаем момент, когда пиксель выше/ниже
+    // был НЕ целевым, а стал целевым — это начало новой серии. Тогда
+    // вызываем рекурсию один раз от этого пикселя.
+    // Пропускаем уже посещённые пиксели.
+
+    // Выше
+    if (y - 1 >= 0) {
+        bool inSegment = false;
+        for (int xi = left; xi <= right; ++xi) {
+            size_t idx = static_cast<size_t>(y - 1) * width + xi;
+            bool ok = !visited[idx] && sameColor(pixels, idx * 4, tr, tg, tb);
+            if (ok && !inSegment) {
+                // начало нового сегмента
+                floodFillTextureSeries(pixels, width, height,
+                    xi, y - 1,
+                    tr, tg, tb,
+                    anchorX, anchorY,
+                    texData, texWidth, texHeight,
+                    visited);
+                inSegment = true;
+            }
+            else if (!ok) {
+                inSegment = false;
+            }
+        }
+    }
+
+    // Ниже
+    if (y + 1 < height) {
+        bool inSegment = false;
+        for (int xi = left; xi <= right; ++xi) {
+            size_t idx = static_cast<size_t>(y + 1) * width + xi;
+            bool ok = !visited[idx] && sameColor(pixels, idx * 4, tr, tg, tb);
+            if (ok && !inSegment) {
+                floodFillTextureSeries(pixels, width, height,
+                    xi, y + 1,
+                    tr, tg, tb,
+                    anchorX, anchorY,
+                    texData, texWidth, texHeight,
+                    visited);
+                inSegment = true;
+            }
+            else if (!ok) {
+                inSegment = false;
             }
         }
     }

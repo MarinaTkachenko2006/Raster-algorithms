@@ -50,6 +50,25 @@ void Task1::fillWithColor(std::vector<uint8_t>& pixels, int width, int height, i
         fillR, fillG, fillB);
 }
 
+void Task1::fillWithTexture(std::vector<uint8_t>& pixels, int width, int height, int x, int y, const uint8_t* texData, int texWidth, int texHeight)
+{
+    if (x < 0 || x >= width || y < 0 || y >= height) return;
+    if (!texData || texWidth <= 0 || texHeight <= 0) return;
+
+    size_t i = (static_cast<size_t>(y) * width + x) * 4;
+    uint8_t tr = pixels[i + 0];
+    uint8_t tg = pixels[i + 1];
+    uint8_t tb = pixels[i + 2];
+
+    std::vector<uint8_t> visited(width * height, 0);
+
+    floodFillTextureSeries(pixels, width, height,
+        x, y,
+        tr, tg, tb,
+        x, y,                              // anchor = точка клика
+        texData, texWidth, texHeight, visited);
+}
+
 Task1::~Task1() noexcept {
     if (canvasTex) SDL_DestroyTexture(canvasTex);
     if (texImage)  SDL_DestroyTexture(texImage);
@@ -166,6 +185,22 @@ void Task1::draw(const AppContext& ctx){
             wasDrawing = false;
         }
     }
+    else if (canvasMode == CanvasMode::FillTexture) {
+        wasDrawing = false;
+
+        if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
+            if (!image.empty()) {
+                ImVec2 m = ImGui::GetIO().MousePos;
+                ImVec2 c = toCanvasCoords(m);
+
+                fillWithTexture(canvasPixels, CANVAS_W, CANVAS_H,
+                    (int)c.x, (int)c.y,
+                    image.data.data(),
+                    image.width, image.height);
+                canvasDirty = true;
+            }
+        }
+    }
     else { // CanvasMode::Fill
         // --- Режим заливки: реагируем на одиночный клик ---
         wasDrawing = false; // сбрасываем, чтобы при переключении режима не было «хвоста» штриха
@@ -184,6 +219,8 @@ void Task1::draw(const AppContext& ctx){
             canvasDirty = true;
         }
     }
+
+
     ImGui::EndChild();
 
     // Небольшой отступ-разделитель
@@ -218,12 +255,14 @@ void Task1::draw(const AppContext& ctx){
 
     // выбор режима работы
     ImGui::Text("Canvas mode");
+
     ImGui::SetNextItemWidth(-FLT_MIN);
-    const char* modeNames[] = { "Draw line", "Fill" };
-    int modeIndex = (canvasMode == CanvasMode::DrawLine) ? 0 : 1;
+    const char* modeNames[] = { "Draw line", "Fill", "Fill with texture" };
+    int modeIndex = static_cast<int>(canvasMode);
     if (ImGui::Combo("##mode", &modeIndex, modeNames, IM_ARRAYSIZE(modeNames))) {
-        canvasMode = (modeIndex == 0) ? CanvasMode::DrawLine : CanvasMode::Fill;
+        canvasMode = static_cast<CanvasMode>(modeIndex);
     }
+
     ImGui::Separator();
 
     // --- Цвет кисти ---
