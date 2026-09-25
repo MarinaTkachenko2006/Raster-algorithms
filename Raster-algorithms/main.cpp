@@ -116,6 +116,9 @@ int main(int argc, char* argv[])
             ImGui::SetNextWindowSize(ImVec2(700, 800), ImGuiCond_FirstUseEver);
             ImGui::Begin(title, &showWindow2, ImGuiWindowFlags_HorizontalScrollbar);
 
+
+            currentTask->draw(ctx);
+
             ImGui::End();
         }
 

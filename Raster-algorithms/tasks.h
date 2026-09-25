@@ -7,7 +7,8 @@
 #include <imgui_impl_sdlrenderer3.h>
 
 #include <array>
-
+#include "dialog_windows.h"
+#include "images.h"
 
 // Класс единого контекста, который получает любая задача
 class AppContext {
@@ -23,15 +24,51 @@ public:
 
     virtual void prepare(const AppContext& ctx) = 0;
 
-    virtual void drawControls(const AppContext& ctx) {}
+    virtual void draw(const AppContext& ctx) {}
 };
 
 class Task1 : public TaskInterface {
+private:
+    FileDialogState dlg; // Диалоговое окно для выбора загрузки файла
+    const SDL_DialogFileFilter filters[2] = {
+        { "Images", "png;jpg;jpeg;bmp;tga;gif;psd;hdr;pic;pnm" },
+        { "All files", "*" } };
+
+    ImageRGB image; // Изображение, загруженное в RAM
+    SDL_Texture* texImage = nullptr; // Текстура загруженного изображения
+
+    // --- Холст ---
+    static constexpr int CANVAS_W = 800;
+    static constexpr int CANVAS_H = 600;
+
+    std::vector<uint8_t> canvasPixels;   // RGBA, размер CANVAS_W*CANVAS_H*4
+    SDL_Texture* canvasTex = nullptr;    // текстура холста
+    bool canvasDirty = true;             // нужно ли обновлять текстуру из буфера
+
+    // --- Текущий цвет кисти ---
+    int brushR = 0, brushG = 0, brushB = 0;
+
+    // толщина кисти
+    int brushThickness = 1;
+
+    // --- Состояние рисования между кадрами ---
+    bool wasDrawing = false;
+    ImVec2 lastDrawPos;                  // предыдущая точка в координатах холста
+
+    // рисование толстой линии
+    void drawThickLine(std::vector<uint8_t>& pixels,
+        int width, int height,
+        int x0, int y0, int x1, int y1,
+        int thickness,
+        uint8_t r, uint8_t g, uint8_t b);
+
 public:
 
     ~Task1() noexcept override;
 
     void prepare(const AppContext& ctx) override;
+    void draw(const AppContext& ctx) override;
+
 };
 
 class Task2 : public TaskInterface {

@@ -22,9 +22,15 @@
     <ClCompile Include="..\third_party\imgui\backends\imgui_impl_sdlrenderer3.cpp">
       <Filter>third_party\imgui\backends</Filter>
     </ClCompile>
+    <ClCompile Include="dialog_windows.cpp" />
+    <ClCompile Include="images.cpp" />
+    <ClCompile Include="algorithms.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="tasks.h" />
+    <ClInclude Include="dialog_windows.h" />
+    <ClInclude Include="images.h" />
+    <ClInclude Include="algorithms.h" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="third_party">
