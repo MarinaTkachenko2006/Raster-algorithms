@@ -1,17 +1,3 @@
-﻿  imgui_impl_sdl3.cpp
-  imgui_impl_sdlrenderer3.cpp
-  imgui.cpp
-  imgui_draw.cpp
-  imgui_tables.cpp
-  imgui_widgets.cpp
-  algorithms.cpp
-  dialog_windows.cpp
-  images.cpp
-  main.cpp
-  stb_impl.cpp
-  tasks.cpp
-  Создание кода...
-  LINK : не найден или не выполнена сборка C:\Users\bobtu\source\repos\Raster algorithms\Raster-algorithms\x64\Debug\Raster-algorithms.exe при последней инкрементной компоновке; выполняется полная компоновка
+﻿  algorithms.cpp
   Raster-algorithms.vcxproj -> C:\Users\bobtu\source\repos\Raster algorithms\Raster-algorithms\x64\Debug\Raster-algorithms.exe
-  C:\Users\bobtu\source\repos\Raster algorithms\Raster-algorithms\third_party\SDL3\lib\x64\SDL3.dll
-  ╤ъюяшЁютрэю Їрщыют: 1.
+  ╤ъюяшЁютрэю Їрщыют: 0.

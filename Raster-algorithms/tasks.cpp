@@ -29,6 +29,27 @@ void Task1::drawThickLine(std::vector<uint8_t>& pixels, int width, int height, i
     }
 }
 
+void Task1::fillWithColor(std::vector<uint8_t>& pixels, int width, int height, int x, int y, uint8_t fillR, uint8_t fillG, uint8_t fillB)
+{
+    // Проверка координат до чтения пикселя
+    if (x < 0 || x >= width || y < 0 || y >= height) return;
+
+    // Считываем цвет стартовой точки — это и есть «целевой цвет»,
+    // который мы будем заменять
+    size_t i = (static_cast<size_t>(y) * width + x) * 4;
+    uint8_t tr = pixels[i + 0];
+    uint8_t tg = pixels[i + 1];
+    uint8_t tb = pixels[i + 2];
+
+    // Если стартовый цвет уже совпадает с цветом заливки — делать нечего
+    if (tr == fillR && tg == fillG && tb == fillB) return;
+
+    floodFillSeries(pixels, width, height,
+        x, y,
+        tr, tg, tb,
+        fillR, fillG, fillB);
+}
+
 Task1::~Task1() noexcept {
     if (canvasTex) SDL_DestroyTexture(canvasTex);
     if (texImage)  SDL_DestroyTexture(texImage);
@@ -116,36 +137,53 @@ void Task1::draw(const AppContext& ctx){
             (screenPos.y - canvasDrawPos.y) / scale);
         };
 
-    // рисуем на холсте
-    if (active && mouseDown) {
-        ImVec2 m = ImGui::GetIO().MousePos;
-        ImVec2 c = toCanvasCoords(m);
+    if (canvasMode == CanvasMode::DrawLine) {
+        // --- Режим рисования линии (как раньше) ---
+        if (active && mouseDown) {
+            ImVec2 m = ImGui::GetIO().MousePos;
+            ImVec2 c = toCanvasCoords(m);
 
-        uint8_t r = (uint8_t)std::clamp(brushR, 0, 255);
-        uint8_t g = (uint8_t)std::clamp(brushG, 0, 255);
-        uint8_t b = (uint8_t)std::clamp(brushB, 0, 255);
+            uint8_t r = (uint8_t)std::clamp(brushR, 0, 255);
+            uint8_t g = (uint8_t)std::clamp(brushG, 0, 255);
+            uint8_t b = (uint8_t)std::clamp(brushB, 0, 255);
 
-        if (!wasDrawing) {
-            drawThickLine(canvasPixels, CANVAS_W, CANVAS_H,
-                (int)c.x, (int)c.y, (int)c.x, (int)c.y,
-                brushThickness, r, g, b);
-            canvasDirty = true;
+            if (!wasDrawing) {
+                drawThickLine(canvasPixels, CANVAS_W, CANVAS_H,
+                    (int)c.x, (int)c.y, (int)c.x, (int)c.y, brushThickness, r, g, b);
+                canvasDirty = true;
+            }
+            else {
+                drawThickLine(canvasPixels, CANVAS_W, CANVAS_H,
+                    (int)lastDrawPos.x, (int)lastDrawPos.y,
+                    (int)c.x, (int)c.y, brushThickness, r, g, b);
+                canvasDirty = true;
+            }
+
+            lastDrawPos = c;
+            wasDrawing = true;
         }
         else {
-            drawThickLine(canvasPixels, CANVAS_W, CANVAS_H,
-                (int)lastDrawPos.x, (int)lastDrawPos.y,
+            wasDrawing = false;
+        }
+    }
+    else { // CanvasMode::Fill
+        // --- Режим заливки: реагируем на одиночный клик ---
+        wasDrawing = false; // сбрасываем, чтобы при переключении режима не было «хвоста» штриха
+
+        if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
+            ImVec2 m = ImGui::GetIO().MousePos;
+            ImVec2 c = toCanvasCoords(m);
+
+            uint8_t r = (uint8_t)std::clamp(brushR, 0, 255);
+            uint8_t g = (uint8_t)std::clamp(brushG, 0, 255);
+            uint8_t b = (uint8_t)std::clamp(brushB, 0, 255);
+
+            fillWithColor(canvasPixels, CANVAS_W, CANVAS_H,
                 (int)c.x, (int)c.y,
-                brushThickness, r, g, b);
+                r, g, b);
             canvasDirty = true;
         }
-
-        lastDrawPos = c;
-        wasDrawing = true;
     }
-    else {
-        wasDrawing = false;
-    }
-
     ImGui::EndChild();
 
     // Небольшой отступ-разделитель
@@ -176,6 +214,16 @@ void Task1::draw(const AppContext& ctx){
     ImGui::BeginChild("ControlsPanel", ImVec2(rightPanelWidth, avail.y), true);
 
     ImGui::Text("Controls");
+    ImGui::Separator();
+
+    // выбор режима работы
+    ImGui::Text("Canvas mode");
+    ImGui::SetNextItemWidth(-FLT_MIN);
+    const char* modeNames[] = { "Draw line", "Fill" };
+    int modeIndex = (canvasMode == CanvasMode::DrawLine) ? 0 : 1;
+    if (ImGui::Combo("##mode", &modeIndex, modeNames, IM_ARRAYSIZE(modeNames))) {
+        canvasMode = (modeIndex == 0) ? CanvasMode::DrawLine : CanvasMode::Fill;
+    }
     ImGui::Separator();
 
     // --- Цвет кисти ---
