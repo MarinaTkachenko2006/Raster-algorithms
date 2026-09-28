@@ -100,6 +100,38 @@ class Task3 : public TaskInterface {
 public:
     ~Task3() noexcept override;
     void prepare(const AppContext& ctx) override;
+    void draw(const AppContext& ctx) override;
+private:
+    static constexpr int CANVAS_WIDTH = 800, CANVAS_HEIGHT = 600;
+
+
+    std::vector<uint8_t> canvas_pixels;  // RGBA, the size is CANVAS_W*CANVAS_H*4
+    SDL_Texture* canvas_texture = nullptr;
+    bool is_canvas_dirty = true;
+
+    struct vertex {
+        float x = 0, y = 0;
+        float r = 1.0f, g = 1.0f, b = 1.0f;
+    };
+    vertex vertices[3];
+
+    // For moving
+    int dragging_vertex = -1; // -1 — not take
+    float vertex_hit_radius = 8; // Hot air intake radius
+    float vertex_draw_radius = 6;
+
+    void reset_vertices();
+    // Calculating the area of a random triangle ABC
+    float area_triangle(float ax, float ay,
+        float bx, float by,
+        float cx, float cy);
+
+    void rasterize_triangle(std::vector<uint8_t>& pixels, int width, int height);
+    int  hit_test_vertex(float cursor_x, float cursor_y) const;
+
+    void draw_vertex_handles(ImDrawList* draw_list,
+        ImVec2 canvas_draw_position,
+        float scale) const;
 };
 
 
