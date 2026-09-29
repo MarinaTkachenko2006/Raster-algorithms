@@ -94,6 +94,44 @@ public:
     ~Task2() noexcept override;
 
     void prepare(const AppContext& ctx) override;
+    void draw(const AppContext& ctx) override;
+
+private:
+    // Холст
+    static constexpr int CANVAS_W = 800;
+    static constexpr int CANVAS_H = 600;
+
+    std::vector<uint8_t> canvasPixels;   // RGBA, размер CANVAS_W*CANVAS_H*4
+    SDL_Texture* canvasTex = nullptr;    // текстура холста
+    bool canvasDirty = true;             // нужно ли перерисовать буфер и обновить текстуру
+
+    // Алгоритм рисования отрезка
+    enum class LineAlgorithm { Bresenham, Wu };
+    LineAlgorithm algorithm = LineAlgorithm::Bresenham;
+
+    // Отрезок хранится вместе с цветом и алгоритмом, которым его рисовали
+    struct Segment {
+        int x0 = 0, y0 = 0, x1 = 0, y1 = 0;
+        uint8_t r = 0, g = 0, b = 0;
+        int thickness = 1;
+        LineAlgorithm algo = LineAlgorithm::Bresenham;
+    };
+    std::vector<Segment> segments;
+
+    // Отрезок, который сейчас тянут мышью (превью)
+    bool isDragging = false;
+    Segment preview;
+
+    // Цвет и толщина кисти
+    float lineColor[3] = { 0.0f, 0.0f, 0.0f };
+    int lineThickness = 1;
+
+    // Концы отрезка для ввода координат вручную
+    int manualCoords[4] = { 100, 100, 700, 450 };
+
+    Segment makeSegment(int x0, int y0, int x1, int y1) const;
+    void rasterizeSegment(const Segment& s);
+    void redrawCanvas();
 };
 
 class Task3 : public TaskInterface {

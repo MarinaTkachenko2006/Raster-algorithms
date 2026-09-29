@@ -357,8 +357,179 @@ void Task1::draw(const AppContext& ctx) {
 	ImGui::EndChild();
 }
 
-Task2::~Task2() noexcept {}
-void Task2::prepare(const AppContext& ctx) {}
+Task2::~Task2() noexcept {
+	if (canvasTex) SDL_DestroyTexture(canvasTex);
+}
+
+void Task2::prepare(const AppContext& ctx) {
+	canvasPixels.assign(CANVAS_W * CANVAS_H * 4, 255); // весь белый
+	canvasTex = SDL_CreateTexture(ctx.renderer, SDL_PIXELFORMAT_RGBA32,
+		SDL_TEXTUREACCESS_STREAMING,
+		CANVAS_W, CANVAS_H);
+	segments.clear();
+	isDragging = false;
+	canvasDirty = true;
+}
+
+// Отрезок с текущими цветом кисти и алгоритмом
+Task2::Segment Task2::makeSegment(int x0, int y0, int x1, int y1) const {
+	Segment s;
+	s.x0 = x0; s.y0 = y0;
+	s.x1 = x1; s.y1 = y1;
+	s.r = (uint8_t)std::clamp(lineColor[0] * 255.0f + 0.5f, 0.0f, 255.0f);
+	s.g = (uint8_t)std::clamp(lineColor[1] * 255.0f + 0.5f, 0.0f, 255.0f);
+	s.b = (uint8_t)std::clamp(lineColor[2] * 255.0f + 0.5f, 0.0f, 255.0f);
+	s.thickness = lineThickness;
+	s.algo = algorithm;
+	return s;
+}
+
+void Task2::rasterizeSegment(const Segment& s) {
+	if (s.algo == LineAlgorithm::Bresenham)
+		bresenhamThickLine(canvasPixels, CANVAS_W, CANVAS_H, s.x0, s.y0, s.x1, s.y1, s.thickness, s.r, s.g, s.b);
+	else
+		wuThickLine(canvasPixels, CANVAS_W, CANVAS_H, s.x0, s.y0, s.x1, s.y1, s.thickness, s.r, s.g, s.b);
+}
+
+// Буфер перерисовывается с нуля: Ву смешивает цвет с фоном,
+// поэтому превью нельзя просто "стереть" — проще нарисовать всё заново
+void Task2::redrawCanvas() {
+	std::fill(canvasPixels.begin(), canvasPixels.end(), 255);
+	for (const Segment& s : segments)
+		rasterizeSegment(s);
+	if (isDragging)
+		rasterizeSegment(preview);
+}
+
+
+void Task2::draw(const AppContext& ctx) {
+	const float rightPanelWidth = 280.0f;
+	const float spacing = 4.0f;
+
+	ImVec2 avail = ImGui::GetContentRegionAvail();
+	float leftWidth = avail.x - rightPanelWidth - spacing;
+
+	// ------------------- Левая часть: холст -------------------
+	ImGui::BeginChild("Task2_Canvas", ImVec2(leftWidth, avail.y),
+		ImGuiChildFlags_Borders,
+		ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+
+	ImVec2 canvasAreaPos = ImGui::GetCursorScreenPos();
+	ImVec2 canvasAreaSize = ImGui::GetContentRegionAvail();
+
+	float scale = std::min(canvasAreaSize.x / (float)CANVAS_W,
+		canvasAreaSize.y / (float)CANVAS_H);
+	// Если холст помещается целиком — берём целый масштаб: каждый пиксель холста
+	// становится ровным квадратом, и разница Брезенхем/Ву видна без искажений
+	bool pixelExact = scale >= 1.0f;
+	if (pixelExact) scale = std::floor(scale);
+	ImVec2 canvasDrawSize(CANVAS_W * scale, CANVAS_H * scale);
+	ImVec2 canvasDrawPos(canvasAreaPos.x + (canvasAreaSize.x - canvasDrawSize.x) * 0.5f,
+		canvasAreaPos.y + (canvasAreaSize.y - canvasDrawSize.y) * 0.5f);
+
+	// Интерактивная зона поверх холста
+	ImGui::SetCursorScreenPos(canvasDrawPos);
+	ImGui::InvisibleButton("##task2_canvas", canvasDrawSize);
+
+	// Экранные координаты -> координаты холста (с ограничением краями холста)
+	ImVec2 m = ImGui::GetIO().MousePos;
+	int cx = std::clamp((int)((m.x - canvasDrawPos.x) / scale), 0, CANVAS_W - 1);
+	int cy = std::clamp((int)((m.y - canvasDrawPos.y) / scale), 0, CANVAS_H - 1);
+
+	// Отрезок задаётся перетаскиванием: нажали — начало, отпустили — конец
+	if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
+		isDragging = true;
+		preview = makeSegment(cx, cy, cx, cy);
+		canvasDirty = true;
+	}
+	if (isDragging) {
+		if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+			if (preview.x1 != cx || preview.y1 != cy) {
+				preview.x1 = cx;
+				preview.y1 = cy;
+				canvasDirty = true;
+			}
+		}
+		else {
+			segments.push_back(preview);
+			isDragging = false;
+			canvasDirty = true;
+		}
+	}
+
+	// Обновляем буфер и текстуру только когда что-то изменилось
+	if (canvasDirty && canvasTex) {
+		redrawCanvas();
+		SDL_UpdateTexture(canvasTex, nullptr, canvasPixels.data(), CANVAS_W * 4);
+		canvasDirty = false;
+	}
+
+	// При целом масштабе рисуем без фильтрации текстуры (nearest): линейная фильтрация
+	// размыла бы отрезок Брезенхема и он выглядел бы сглаженным, как у Ву.
+	// При уменьшении nearest терял бы тонкие линии, поэтому там остаётся linear.
+	const ImGuiPlatformIO& pio = ImGui::GetPlatformIO();
+	ImDrawList* dl = ImGui::GetWindowDrawList();
+	if (pixelExact && pio.DrawCallback_SetSamplerNearest) dl->AddCallback(pio.DrawCallback_SetSamplerNearest, nullptr);
+	dl->AddImage((ImTextureID)(intptr_t)canvasTex,
+		canvasDrawPos,
+		ImVec2(canvasDrawPos.x + canvasDrawSize.x, canvasDrawPos.y + canvasDrawSize.y));
+	if (pixelExact && pio.DrawCallback_SetSamplerLinear) dl->AddCallback(pio.DrawCallback_SetSamplerLinear, nullptr);
+
+	ImGui::EndChild();
+
+	// ------------------- Правая часть: управление -------------------
+	ImGui::SameLine();
+	ImGui::BeginChild("Task2_Controls", ImVec2(rightPanelWidth, avail.y), true);
+
+	ImGui::Text("Line algorithm");
+	ImGui::Separator();
+
+	int algoIndex = static_cast<int>(algorithm);
+	ImGui::RadioButton("Bresenham (integer)", &algoIndex, static_cast<int>(LineAlgorithm::Bresenham));
+	ImGui::RadioButton("Wu (anti-aliased)", &algoIndex, static_cast<int>(LineAlgorithm::Wu));
+	algorithm = static_cast<LineAlgorithm>(algoIndex);
+
+	ImGui::Separator();
+
+	ImGui::Text("Line color");
+	ImGui::SetNextItemWidth(-FLT_MIN);
+	ImGui::ColorEdit3("##line_color", lineColor);
+
+	ImGui::Text("Line thickness");
+	ImGui::SetNextItemWidth(-FLT_MIN);
+	ImGui::SliderInt("##thickness", &lineThickness, 1, 30, "%d px");
+	lineThickness = std::clamp(lineThickness, 1, 30);
+
+	ImGui::Separator();
+
+	// Ввод отрезка по координатам
+	ImGui::Text("Segment by coordinates");
+	ImGui::SetNextItemWidth(-FLT_MIN);
+	ImGui::InputInt4("##coords", manualCoords);
+	manualCoords[0] = std::clamp(manualCoords[0], 0, CANVAS_W - 1);
+	manualCoords[1] = std::clamp(manualCoords[1], 0, CANVAS_H - 1);
+	manualCoords[2] = std::clamp(manualCoords[2], 0, CANVAS_W - 1);
+	manualCoords[3] = std::clamp(manualCoords[3], 0, CANVAS_H - 1);
+	ImGui::TextDisabled("x0, y0, x1, y1");
+	if (ImGui::Button("Draw segment", ImVec2(-FLT_MIN, 0))) {
+		segments.push_back(makeSegment(manualCoords[0], manualCoords[1],
+			manualCoords[2], manualCoords[3]));
+		canvasDirty = true;
+	}
+
+	ImGui::Separator();
+
+	if (ImGui::Button("Undo", ImVec2(-FLT_MIN, 0)) && !segments.empty()) {
+		segments.pop_back();
+		canvasDirty = true;
+	}
+	if (ImGui::Button("Clear", ImVec2(-FLT_MIN, 0))) {
+		segments.clear();
+		canvasDirty = true;
+	}
+
+	ImGui::EndChild();
+}
 Task3::~Task3() noexcept {
 	if (this->canvas_texture) SDL_DestroyTexture(this->canvas_texture);
 }
